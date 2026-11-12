@@ -32,6 +32,17 @@ public class CombatantState
         return actualDamage;
     }
 
+    // Piercing damage ignores Shield.
+    public int TakePiercingDamage(int damage)
+    {
+        damage = Math.Max(0, damage);
+
+        int actualDamage = Math.Min(HP, damage);
+        HP -= actualDamage;
+
+        return actualDamage;
+    }
+
     public void Heal(int amount)
     {
         HP = Math.Min(MaxHP, HP + Math.Max(0, amount));

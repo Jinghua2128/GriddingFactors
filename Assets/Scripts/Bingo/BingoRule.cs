@@ -7,7 +7,8 @@ public enum BingoRuleType
     GreaterThan,
     LessThan,
     Prime,
-    Wildcard
+    Wildcard,
+    Any
 }
 
 public readonly struct BingoRule

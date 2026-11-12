@@ -46,6 +46,18 @@ public class CardView : MonoBehaviour
                     $"+{card.Value} next Attack";
                 break;
 
+            
+            case CardType.Heal:
+                descriptionText.text =
+                    $"Restore {card.Value} HP";
+                break;
+
+            case CardType.PiercingAttack:
+                descriptionText.text =
+                    $"Deal {card.Value} damage\nIgnores Shield";
+                break;
+
+
             default:
                 descriptionText.text = "Unknown effect";
                 break;

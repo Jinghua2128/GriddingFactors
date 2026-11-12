@@ -38,6 +38,8 @@ public class RoundManager : MonoBehaviour
     [Header("Shop Transition")]
     [SerializeField] private TMP_Text shopSummaryText;
     [SerializeField] private Button nextEncounterButton;
+    [Header("Shop System")]
+    [SerializeField] private ShopController shopController;
 
     [Header("Results")]
     [SerializeField] private TMP_Text victorySummaryText;
@@ -47,8 +49,10 @@ public class RoundManager : MonoBehaviour
 
     public GamePhase CurrentPhase { get; private set; }
 
+
     private void Start()
     {
+        // Validate Inspector references.
         if (bingoPanel == null ||
             combatPanel == null ||
             shopPanel == null ||
@@ -63,18 +67,21 @@ public class RoundManager : MonoBehaviour
             shopSummaryText == null ||
             nextEncounterButton == null ||
             victorySummaryText == null ||
-            defeatSummaryText == null)
+            defeatSummaryText == null ||
+            shopController == null)
         {
             Debug.LogError(
                 "RoundManager: Missing Inspector references."
             );
+
             enabled = false;
             return;
         }
 
+        // Create persistent run state.
         run = new RunProgress();
 
-        // Create the player and deck ONCE.
+        // Initialize player and deck once.
         combat.Initialize();
 
         if (!combat.IsInitialized)
@@ -84,25 +91,32 @@ public class RoundManager : MonoBehaviour
             return;
         }
 
-        // Listen for existing game events.
+        // Subscribe to gameplay events.
         powerball.PhaseFinished += HandleBingoFinished;
         combat.RoundFinished += HandleCombatFinished;
 
+        // Subscribe to Bingo buff events.
         bingoBuffs.ImmediateHealingRequested +=
             HandleImmediateHealing;
 
         bingoBuffs.ImmediateFocusRequested +=
             HandleImmediateFocus;
 
+        // Subscribe to shop purchase events.
+        shopController.PurchasesChanged += RefreshRunHUD;
+
+        // Next Encounter button.
         nextEncounterButton.onClick.AddListener(
             HandleNextEncounterClicked
         );
 
+        // Initialize Bingo.
         powerball.Initialize();
 
         // Start encounter 1.
         BeginEncounter();
     }
+
 
     private void BeginEncounter()
     {
@@ -204,22 +218,37 @@ public class RoundManager : MonoBehaviour
         }
     }
 
+
     private void ShowShop(int reward)
     {
         CurrentPhase = GamePhase.Shop;
 
+        // Reset temporary effects from the previous
+        // encounter BEFORE applying shop upgrades.
+        combat.PrepareForShop();
+
         ShowPanel(shopPanel);
 
         shopSummaryText.text =
-            $"ENCOUNTER {run.EncounterNumber} COMPLETE!\n\n" +
-            $"Coins earned: +{reward}\n" +
-            $"Coins available: {run.Coins}\n\n" +
-            "Shop purchases will be added next.\n" +
-            "Continue when ready.";
+            $"ENCOUNTER {run.EncounterNumber} COMPLETE!\n" +
+            $"Coins earned: +{reward}\n\n" +
+            "Choose your upgrades.";
+
+        // Open the three offers for this shop visit.
+        shopController.Open(
+            run,
+            combat,
+            bingoBoard,
+            run.EncounterNumber
+        );
 
         nextEncounterButton.interactable = true;
 
-        Debug.Log("SHOP TRANSITION");
+        RefreshRunHUD();
+
+        Debug.Log(
+            $"SHOP {run.EncounterNumber} OPENED"
+        );
     }
 
     private void HandleNextEncounterClicked()
@@ -339,6 +368,10 @@ public class RoundManager : MonoBehaviour
             nextEncounterButton.onClick.RemoveListener(
                 HandleNextEncounterClicked
             );
+        }
+        if (shopController != null)
+        {
+            shopController.PurchasesChanged -= RefreshRunHUD;
         }
     }
 }

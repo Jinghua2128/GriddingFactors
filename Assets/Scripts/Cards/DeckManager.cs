@@ -6,7 +6,8 @@ public class DeckManager
     private readonly List<CardInstance> drawPile = new();
     private readonly List<CardInstance> discardPile = new();
     private readonly List<CardInstance> hand = new();
-
+    private readonly List<CardInstance> allCards = new();
+    public IReadOnlyList<CardInstance> AllCards => allCards;
     public int DrawCount => drawPile.Count;
     public int DiscardCount => discardPile.Count;
     public int HandCount => hand.Count;
@@ -26,13 +27,15 @@ public class DeckManager
         Shuffle(drawPile);
     }
 
+
     private void AddCopies(CardData data, int count)
     {
         for (int i = 0; i < count; i++)
         {
-            drawPile.Add(new CardInstance(data));
+            AddCard(data);
         }
     }
+
 
     public IReadOnlyList<CardInstance> DrawHand(int amount)
     {
@@ -98,4 +101,30 @@ public class DeckManager
             (cards[i], cards[j]) = (cards[j], cards[i]);
         }
     }
+    
+    public void AddCard(CardData data)
+    {
+        if (data == null)
+        {
+            Debug.LogError("Cannot add null card data.");
+            return;
+        }
+
+        CardInstance instance = new CardInstance(data);
+
+        allCards.Add(instance);
+        drawPile.Add(instance);
+
+        Shuffle(drawPile);
+    }
+
+    public bool TryUpgradeCard(CardInstance instance)
+    {
+        if (instance == null || !allCards.Contains(instance))
+            return false;
+
+        instance.Upgrade();
+        return true;
+    }
+
 }

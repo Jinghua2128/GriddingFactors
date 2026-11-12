@@ -45,58 +45,57 @@ public class BingoAttackBuffs : MonoBehaviour
             board.CellBuffTriggered -= HandleBuff;
     }
 
-    private void HandleBuff(string buffCode)
+    private void HandleBuff(string buffCode, int buffLevel)
     {
+        int bonus = Mathf.Max(0, buffLevel);
+
         switch (buffCode)
         {
-            // ATTACK
             case "A1":
-                PendingAttackBonus += 2;
-                Debug.Log("A1: +2 next Attack");
+                PendingAttackBonus += 2 + bonus;
                 break;
 
             case "A2":
-                PendingAfterActionDamage += 2;
-                Debug.Log("A2: +2 after-action damage");
+                PendingAfterActionDamage += 2 + bonus;
                 break;
 
-            // DEFENSE
             case "D1":
-                PendingRoundShield += 3;
-                Debug.Log("D1: +3 Shield this round");
+                PendingRoundShield += 3 + bonus;
                 break;
 
             case "D2":
-                PendingEnemyAttackReduction += 2;
-                Debug.Log("D2: Reduce enemy attack by 2");
+                PendingEnemyAttackReduction += 2 + bonus;
                 break;
 
-            // HEALING
             case "H1":
-                ImmediateHealingRequested?.Invoke(2);
-                Debug.Log("H1: Immediate healing +2");
+                ImmediateHealingRequested?.Invoke(2 + bonus);
                 break;
 
             case "H2":
-                PendingEndRoundHealing += 1;
-                Debug.Log("H2: Heal 1 at end of round");
+                PendingEndRoundHealing += 1 + bonus;
                 break;
 
-            // UTILITY
             case "U1":
-                ImmediateFocusRequested?.Invoke(2);
-                Debug.Log("U1: Immediate Focus +2");
+                ImmediateFocusRequested?.Invoke(2 + bonus);
                 break;
 
             case "U2":
-                nextRoundExtraDraws++;
-
-                Debug.Log(
-                    "U2: Extra card scheduled for next round."
-                );
+                nextRoundExtraDraws += 1 + bonus;
                 break;
+
+            default:
+                Debug.LogWarning(
+                    $"Unknown Bingo buff: {buffCode}"
+                );
+                return;
         }
+
+        Debug.Log(
+            $"Bingo buff activated: {buffCode}" +
+            $" (Level {buffLevel})"
+        );
     }
+
 
     // Called once when a new Bingo round begins.
     public void BeginBingoRound()

@@ -30,6 +30,29 @@ public class BingoCellUI : MonoBehaviour
     [SerializeField] private GameObject completedLineHighlight;
     [SerializeField] private TMP_Text lineCountBadge;
 
+    public BingoRule CurrentRule => rule;
+
+    public int BuffLevel { get; private set; }
+
+    public void UpgradeBuff()
+    {
+        BuffLevel++;
+        RefreshVisuals();
+    }
+
+
+    public bool SetRule(BingoRule newRule)
+    {
+        if (IsMarked)
+            return false;
+
+        rule = newRule;
+        RefreshVisuals();
+
+        return true;
+    }
+
+
     public void SetCompletedLineCount(int count)
     {
         bool completed = count > 0;
@@ -84,6 +107,7 @@ public class BingoCellUI : MonoBehaviour
 
     public void Configure(BingoRule newRule, string newBuff)
     {
+        BuffLevel = 0;
         rule = newRule;
         buffCode = newBuff;
 
@@ -129,8 +153,11 @@ public class BingoCellUI : MonoBehaviour
             ruleText.text = rule.GetLabel();
         }
 
-        buffText.text = buffCode;
+        buffText.text = BuffLevel > 0
+            ? $"{buffCode} +{BuffLevel}"
+            : buffCode;
         buffText.color = GetBuffColor();
+        
     }
 
     private Color GetRuleColor()

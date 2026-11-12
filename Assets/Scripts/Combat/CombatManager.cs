@@ -1,4 +1,6 @@
+
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,6 +29,12 @@ public class CombatManager : MonoBehaviour
     [SerializeField] private TMP_Text battleLogText;
     [SerializeField] private Button continueButton;
 
+    [Header("Bingo Buffs")]
+    [SerializeField] private BingoAttackBuffs bingoAttackBuffs;
+
+    [Header("Bingo Ultimates")]
+    [SerializeField] private BingoUltimateTracker ultimateTracker;
+
     public event Action<CombatRoundOutcome> RoundFinished;
 
     private CombatantState player;
@@ -39,8 +47,9 @@ public class CombatManager : MonoBehaviour
 
     private CombatRoundOutcome? pendingOutcome;
 
-    [Header("Bingo Buffs")]
-    [SerializeField] private BingoAttackBuffs bingoAttackBuffs;
+    private int enemyAttackDamage = 2;
+    private string enemyDisplayName = "Lucky Slime";
+
     public bool IsInitialized => initialized;
 
     public int PlayerHP =>
@@ -52,11 +61,10 @@ public class CombatManager : MonoBehaviour
     public int PlayerFocus =>
         player != null ? player.Focus : 0;
 
-    [Header("Bingo Ultimates")]
-    [SerializeField] private BingoUltimateTracker ultimateTracker;
-
-    private int enemyAttackDamage = 2;
-    private string enemyDisplayName = "Lucky Slime";
+    public IReadOnlyList<CardInstance> ShopCards =>
+        deck != null
+            ? deck.AllCards
+            : Array.Empty<CardInstance>();
 
     #if UNITY_EDITOR
     [ContextMenu("DEBUG: Win Current Encounter")]
@@ -69,11 +77,9 @@ public class CombatManager : MonoBehaviour
 
         waitingForCard = false;
 
-        // Bypass the fight for progression testing only.
         ClearHandUI();
 
         enemy.TakeDamage(enemy.HP + enemy.Shield);
-
         player.ClearShield();
 
         FinishCombatRound(
@@ -82,31 +88,6 @@ public class CombatManager : MonoBehaviour
         );
     }
     #endif
-
-
-    public void AddFocusImmediately(int amount)
-    {
-        if (!initialized || player.IsDefeated)
-        {
-            Debug.LogWarning(
-                "Cannot add Focus: player is not ready."
-            );
-            return;
-        }
-
-        int before = player.Focus;
-
-        player.AddFocus(amount);
-
-        int gained = player.Focus - before;
-
-        Debug.Log(
-            $"U1: Gained +{gained} Focus. " +
-            $"Current Focus: +{player.Focus}"
-        );
-
-        RefreshUI();
-    }
 
     public void Initialize()
     {
@@ -122,10 +103,12 @@ public class CombatManager : MonoBehaviour
             enemyStatusText == null ||
             battleLogText == null ||
             continueButton == null ||
-            bingoAttackBuffs == null)
+            bingoAttackBuffs == null ||
+            ultimateTracker == null)
         {
             Debug.LogError(
-                "CombatManager: Missing Inspector reference."
+                "CombatManager: Missing Inspector reference.",
+                this
             );
             return;
         }
@@ -146,6 +129,8 @@ public class CombatManager : MonoBehaviour
         continueButton.gameObject.SetActive(false);
 
         initialized = true;
+
+        RefreshUI();
     }
 
     public void BeginCombatPhase()
@@ -177,15 +162,14 @@ public class CombatManager : MonoBehaviour
 
         ClearHandUI();
 
-                
-        int handSize = bingoAttackBuffs.ConsumeHandSize(3);
+        int handSize =
+            bingoAttackBuffs.ConsumeHandSize(3);
 
         var hand = deck.DrawHand(handSize);
 
         Debug.Log(
             $"Combat hand: {handSize} cards drawn."
         );
-
 
         foreach (CardInstance card in hand)
         {
@@ -205,7 +189,9 @@ public class CombatManager : MonoBehaviour
 
     private void HandleCardPlayed(CardInstance card)
     {
-        if (!waitingForCard)
+        if (!initialized ||
+            !waitingForCard ||
+            card == null)
             return;
 
         if (!deck.PlayCard(card))
@@ -215,15 +201,10 @@ public class CombatManager : MonoBehaviour
 
         ClearHandUI();
 
-        // Player's selected card.
         string result = ResolvePlayerCard(card);
 
-        // Hook for Bingo after-action buffs.
-        // Effects will be connected next.
         result += ResolveAfterPlayerAction();
 
-        // Old enemy Shield expires after the
-        // complete player action.
         if (enemy.Shield > 0)
         {
             result +=
@@ -232,11 +213,8 @@ public class CombatManager : MonoBehaviour
 
         enemy.ClearShield();
 
-        // Enemy cannot act after being defeated.
         if (enemy.IsDefeated)
         {
-            // Finish pending H2 healing even though
-            // the enemy will not take its turn.
             result += ResolveEndOfRoundHealing();
 
             player.ClearShield();
@@ -249,24 +227,17 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-
-        // First enemy: 70% Attack, 30% Defend.
         EnemyActionType action =
             EnemyActionSelector.Choose(false);
 
-        
         result += ResolveEnemyAction(action);
 
-        // Only living players receive end-of-round healing.
-        // If enemy damage defeated the player,
-        // the run ends immediately.
         if (!player.IsDefeated)
         {
             result += ResolveEndOfRoundHealing();
         }
-        // Player Shield expires at the end of the round.
-        player.ClearShield();
 
+        player.ClearShield();
 
         CombatRoundOutcome outcome =
             player.IsDefeated
@@ -278,7 +249,6 @@ public class CombatManager : MonoBehaviour
 
     private string ResolvePlayerCard(CardInstance card)
     {
-        // Diagonal applies to the next card of ANY type.
         int cardMultiplier =
             ultimateTracker.ConsumeDiagonalMultiplier(
                 out int diagonalHealing
@@ -289,38 +259,41 @@ public class CombatManager : MonoBehaviour
         switch (card.Data.type)
         {
             case CardType.Attack:
+            case CardType.PiercingAttack:
             {
+                bool piercing =
+                    card.Data.type == CardType.PiercingAttack;
+
                 int baseDamage = card.Value;
                 int focusBonus = player.ConsumeFocus();
 
                 int bingoBonus =
                     bingoAttackBuffs.ConsumeAttackBonus();
 
-                // Horizontal only applies to Attack.
-                int attackMultiplier =
+                int horizontalMultiplier =
                     ultimateTracker.ConsumeHorizontalMultiplier();
 
-                // All additive bonuses FIRST.
                 int totalDamage =
-                    baseDamage + focusBonus + bingoBonus;
-
-                // Multipliers AFTER additive bonuses.
-                totalDamage *=
-                    attackMultiplier * cardMultiplier;
+                    (baseDamage + focusBonus + bingoBonus)
+                    * horizontalMultiplier
+                    * cardMultiplier;
 
                 int shieldBefore = enemy.Shield;
-                int hpLost = enemy.TakeDamage(totalDamage);
-                int blocked =
-                    Mathf.Min(shieldBefore, totalDamage);
+
+                int hpLost = piercing
+                    ? enemy.TakePiercingDamage(totalDamage)
+                    : enemy.TakeDamage(totalDamage);
+
+                int blocked = piercing
+                    ? 0
+                    : Mathf.Min(shieldBefore, totalDamage);
 
                 result =
-                    $"Attack: {baseDamage}" +
-                    $" + Focus: {focusBonus}" +
-                    $" + Bingo: {bingoBonus}" +
-                    $"\nHorizontal ×{attackMultiplier}" +
-                    $" | Diagonal ×{cardMultiplier}" +
-                    $"\nTotal damage: {totalDamage}" +
-                    $"\nBlocked: {blocked}" +
+                    $"{(piercing ? "Piercing Attack" : "Attack")}" +
+                    $": {totalDamage} damage." +
+                    $"\nHorizontal x{horizontalMultiplier}" +
+                    $" | Diagonal x{cardMultiplier}" +
+                    $"\nShield blocked: {blocked}" +
                     $" | HP lost: {hpLost}";
 
                 break;
@@ -335,7 +308,7 @@ public class CombatManager : MonoBehaviour
 
                 result =
                     $"Defend: +{shield} Shield" +
-                    $"\nDiagonal ×{cardMultiplier}";
+                    $"\nDiagonal x{cardMultiplier}";
 
                 break;
             }
@@ -353,8 +326,26 @@ public class CombatManager : MonoBehaviour
 
                 result =
                     $"Focus: +{actualGain}" +
-                    $"\nDiagonal ×{cardMultiplier}" +
+                    $"\nDiagonal x{cardMultiplier}" +
                     $"\nTotal Focus: +{player.Focus}";
+
+                break;
+            }
+
+            case CardType.Heal:
+            {
+                int healing =
+                    card.Value * cardMultiplier;
+
+                int before = player.HP;
+
+                player.Heal(healing);
+
+                int actualHealing = player.HP - before;
+
+                result =
+                    $"Heal restores {actualHealing} HP." +
+                    $"\nDiagonal x{cardMultiplier}";
 
                 break;
             }
@@ -366,8 +357,6 @@ public class CombatManager : MonoBehaviour
             }
         }
 
-        // Diagonal's healing is a separate reward.
-        // It does NOT get multiplied by cardMultiplier.
         if (diagonalHealing > 0)
         {
             int hpBefore = player.HP;
@@ -383,7 +372,6 @@ public class CombatManager : MonoBehaviour
         return result;
     }
 
-
     private string ResolveAfterPlayerAction()
     {
         int damage =
@@ -392,10 +380,11 @@ public class CombatManager : MonoBehaviour
         if (damage <= 0)
             return "";
 
-        // The effect is consumed even when the
-        // player already defeated the enemy.
         if (enemy.IsDefeated)
-            return "\nFollow-up Strike had no remaining target.";
+        {
+            return
+                "\nFollow-up Strike had no remaining target.";
+        }
 
         int shieldBefore = enemy.Shield;
 
@@ -411,59 +400,57 @@ public class CombatManager : MonoBehaviour
             $" Blocked: {blocked}, HP lost: {hpLost}.";
     }
 
-
-    private string ResolveEnemyAction(EnemyActionType action)
+    private string ResolveEnemyAction(
+        EnemyActionType action
+    )
     {
         switch (action)
         {
-
             case EnemyActionType.Attack:
+            {
+                int baseDamage = enemyAttackDamage;
+
+                if (ultimateTracker.TryConsumeVerticalBlock())
                 {
-                    int baseDamage = enemyAttackDamage;
-                    // Check whether a Vertical Bingo can block
-                    // this enemy Attack completely.
-                    if (ultimateTracker.TryConsumeVerticalBlock())
-                    {
-                        return
-                            "\nVERTICAL BINGO! Enemy Attack blocked!";
-                    }
-                    // D2 reduces the enemy's attack damage
-                    // before Shield absorbs anything.
-                    int reduction =
-                        bingoAttackBuffs.ConsumeEnemyAttackReduction();
-
-                    int effectiveDamage = Mathf.Max(
-                        0,
-                        baseDamage - reduction
-                    );
-
-                    int actualReduction =
-                        baseDamage - effectiveDamage;
-
-                    int shieldBefore = player.Shield;
-
-                    int hpLost = player.TakeDamage(effectiveDamage);
-
-                    int blocked = Mathf.Min(
-                        shieldBefore,
-                        effectiveDamage
-                    );
-
                     return
-                        $"\nEnemy Attack: {baseDamage}" +
-                        $"\nBingo reduction: -{actualReduction}" +
-                        $"\nEffective damage: {effectiveDamage}" +
-                        $"\nBlocked by Shield: {blocked}" +
-                        $"\nHP lost: {hpLost}";
+                        "\nVERTICAL BINGO! Enemy Attack blocked!";
                 }
 
+                int reduction =
+                    bingoAttackBuffs.ConsumeEnemyAttackReduction();
+
+                int effectiveDamage = Mathf.Max(
+                    0,
+                    baseDamage - reduction
+                );
+
+                int actualReduction =
+                    baseDamage - effectiveDamage;
+
+                int shieldBefore = player.Shield;
+
+                int hpLost =
+                    player.TakeDamage(effectiveDamage);
+
+                int blocked = Mathf.Min(
+                    shieldBefore,
+                    effectiveDamage
+                );
+
+                return
+                    $"\nEnemy Attack: {baseDamage}" +
+                    $"\nBingo reduction: -{actualReduction}" +
+                    $"\nEffective damage: {effectiveDamage}" +
+                    $"\nBlocked by Shield: {blocked}" +
+                    $"\nHP lost: {hpLost}";
+            }
 
             case EnemyActionType.Defend:
-                {
-                    enemy.AddShield(3);
+            {
+                enemy.AddShield(3);
 
-                    return "\nEnemy gains 3 Shield.";
-                }
+                return "\nEnemy gains 3 Shield.";
+            }
 
             default:
                 return "\nUnknown enemy action.";
@@ -471,18 +458,19 @@ public class CombatManager : MonoBehaviour
     }
 
     private void FinishCombatRound(
-    string message,
-        CombatRoundOutcome outcome)        
-
+        string message,
+        CombatRoundOutcome outcome
+    )
     {
-        // Current-round defensive effects expire
-        // whether the enemy attacked or defended.
         bingoAttackBuffs.ClearRoundDefenseEffects();
+
         pendingOutcome = outcome;
+
         if (outcome != CombatRoundOutcome.Continue)
         {
             bingoAttackBuffs.ClearEncounterEffects();
         }
+
         battleLogText.text = message;
 
         RefreshUI();
@@ -507,6 +495,9 @@ public class CombatManager : MonoBehaviour
 
     private void ClearHandUI()
     {
+        if (handPanel == null)
+            return;
+
         foreach (Transform child in handPanel)
         {
             child.gameObject.SetActive(false);
@@ -516,27 +507,45 @@ public class CombatManager : MonoBehaviour
 
     private void RefreshUI()
     {
+        if (!initialized)
+            return;
+
         playerStatusText.text =
             $"PLAYER\n" +
             $"HP: {player.HP}/{player.MaxHP}\n" +
             $"Shield: {player.Shield}\n" +
             $"Focus: +{player.Focus}";
+
         enemyStatusText.text =
             $"{enemyDisplayName}\n" +
             $"HP: {enemy.HP}/{enemy.MaxHP}\n" +
             $"Shield: {enemy.Shield}";
-
     }
 
-    private void OnDestroy()
+    public void AddFocusImmediately(int amount)
     {
-        if (continueButton != null)
+        if (!initialized || player.IsDefeated)
         {
-            continueButton.onClick.RemoveListener(
-                ContinueAfterCombat
+            Debug.LogWarning(
+                "Cannot add Focus: player is not ready."
             );
+            return;
         }
+
+        int before = player.Focus;
+
+        player.AddFocus(amount);
+
+        int gained = player.Focus - before;
+
+        Debug.Log(
+            $"U1: Gained +{gained} Focus. " +
+            $"Current Focus: +{player.Focus}"
+        );
+
+        RefreshUI();
     }
+
     public void HealPlayerImmediately(int amount)
     {
         if (!initialized || player.IsDefeated)
@@ -549,7 +558,6 @@ public class CombatManager : MonoBehaviour
 
         int hpBefore = player.HP;
 
-        // Reuse the existing CombatantState.
         player.Heal(amount);
 
         int actualHealing = player.HP - hpBefore;
@@ -581,6 +589,44 @@ public class CombatManager : MonoBehaviour
             $" Player HP: {player.HP}/{player.MaxHP}.";
     }
 
+    // SHOP SYSTEM
+
+    public bool TryAddShopCard(CardData data)
+    {
+        if (!initialized || data == null)
+            return false;
+
+        deck.AddCard(data);
+
+        return true;
+    }
+
+    public bool TryUpgradeShopCard(CardInstance instance)
+    {
+        if (!initialized || instance == null)
+            return false;
+
+        return deck.TryUpgradeCard(instance);
+    }
+
+    public void PrepareForShop()
+    {
+        if (!initialized)
+            return;
+
+        waitingForCard = false;
+        pendingOutcome = null;
+
+        player.ResetTemporaryEffects();
+
+        ClearHandUI();
+        continueButton.gameObject.SetActive(false);
+
+        RefreshUI();
+    }
+
+    // ENCOUNTER PROGRESSION
+
     public void BeginNewEncounter(EncounterDefinition definition)
     {
         if (!initialized)
@@ -591,24 +637,36 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-        // Create a NEW enemy for this encounter.
+        if (definition.MaxHP <= 0)
+        {
+            Debug.LogError(
+                "Encounter MaxHP must be greater than zero."
+            );
+            return;
+        }
+
         enemy = new CombatantState(definition.MaxHP);
 
         enemyAttackDamage = definition.AttackDamage;
         enemyDisplayName = definition.Name;
 
-        // Reset temporary combat effects.
-        // HP remains unchanged.
-        player.ResetTemporaryEffects();
+        // Keep the rest of your existing code.
+        enemy = new CombatantState(
+            definition.MaxHP
+        );
 
-        // The deck remains unchanged.
-        // The Bingo board and Ultimates remain unchanged.
+        enemyAttackDamage =
+            definition.AttackDamage;
+
+        enemyDisplayName =
+            definition.Name;
 
         turnNumber = 0;
         waitingForCard = false;
         pendingOutcome = null;
 
         ClearHandUI();
+
         continueButton.gameObject.SetActive(false);
 
         RefreshUI();
@@ -621,6 +679,17 @@ public class CombatManager : MonoBehaviour
             $" | Cards: {deck.TotalCards}"
         );
     }
-    
 
+        
+
+
+    private void OnDestroy()
+    {
+        if (continueButton != null)
+        {
+            continueButton.onClick.RemoveListener(
+                ContinueAfterCombat
+            );
+        }
+    }
 }

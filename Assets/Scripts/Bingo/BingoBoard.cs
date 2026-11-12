@@ -61,7 +61,7 @@ public class BingoBoard : MonoBehaviour
 
     public BingoCellUI[] Cells { get; private set; }
 
-    public event Action<string> CellBuffTriggered;
+    public event Action<string, int> CellBuffTriggered;
 
     private void Start()
     {
@@ -146,6 +146,69 @@ public class BingoBoard : MonoBehaviour
         return false;
     }
 
+    public bool TryUpgradeRule(
+        int cellIndex,
+        BingoRule newRule)
+    {
+        if (Cells == null ||
+            cellIndex < 0 ||
+            cellIndex >= Cells.Length)
+            return false;
+
+        BingoCellUI cell = Cells[cellIndex];
+
+        // Number rules can only change on empty cells.
+        if (cell.IsMarked)
+            return false;
+
+        if (!cell.SetRule(newRule))
+            return false;
+
+        Debug.Log(
+            $"Cell {cellIndex + 1} condition upgraded " +
+            $"to {newRule.GetLabel()}."
+        );
+
+        return true;
+    }
+
+    public bool TryUpgradeBuff(int cellIndex)
+    {
+        if (Cells == null ||
+            cellIndex < 0 ||
+            cellIndex >= Cells.Length)
+            return false;
+
+        // The centre Wildcard has its own special reward.
+        if (cellIndex == 12)
+            return false;
+
+        BingoCellUI cell = Cells[cellIndex];
+
+        if (string.IsNullOrEmpty(cell.BuffCode))
+            return false;
+
+        cell.UpgradeBuff();
+
+        // GDD rule:
+        // If an occupied cell is upgraded,
+        // trigger its improved buff once immediately.
+        if (cell.IsMarked)
+        {
+            CellBuffTriggered?.Invoke(
+                cell.BuffCode,
+                cell.BuffLevel
+            );
+        }
+
+        Debug.Log(
+            $"Cell {cellIndex + 1} buff upgraded " +
+            $"to level {cell.BuffLevel}."
+        );
+
+        return true;
+    }
+
 
     public bool TryPlaceNumber(BingoCellUI cell, int number)
     {
@@ -161,7 +224,10 @@ public class BingoBoard : MonoBehaviour
 
         ClearHighlights();
         // Tell other systems which buff was activated.
-        CellBuffTriggered?.Invoke(cell.BuffCode);
+        CellBuffTriggered?.Invoke(
+            cell.BuffCode,
+            cell.BuffLevel
+        );
 
         // Collect the occupied state of all 25 cells.
         bool[] marked = new bool[Cells.Length];
