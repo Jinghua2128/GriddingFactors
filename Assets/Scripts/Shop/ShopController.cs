@@ -14,6 +14,7 @@ public class ShopController : MonoBehaviour
     [Header("Shop Display")]
     [SerializeField] private TMP_Text shopCoinsText;
     [SerializeField] private TMP_Text shopStatusText;
+    [SerializeField] private Sprite boxFrameSprite;
 
     [Header("Card Offer")]
     [SerializeField] private TMP_Text cardOfferText;
@@ -42,6 +43,8 @@ public class ShopController : MonoBehaviour
     private readonly List<int> ruleTargets = new();
     private readonly List<int> buffTargets = new();
 
+    private ShopTargetOverlay targetOverlay;
+
     private RunProgress run;
     private CombatManager combat;
     private BingoBoard board;
@@ -56,6 +59,21 @@ public class ShopController : MonoBehaviour
 
     private void Awake()
     {
+        targetOverlay = gameObject.AddComponent<ShopTargetOverlay>();
+
+        if (transform is RectTransform rect && shopStatusText != null)
+            targetOverlay.Build(
+                rect,
+                shopStatusText.font,
+                shopStatusText.fontSharedMaterial);
+
+        AddShopBackdrop();
+        AddShopSign();
+
+        AddBoxFrame(cardOfferText.transform.parent as RectTransform);
+        AddBoxFrame(ruleOfferText.transform.parent as RectTransform);
+        AddBoxFrame(buffOfferText.transform.parent as RectTransform);
+
         buyCardButton.onClick.AddListener(BuyCard);
         buyRuleButton.onClick.AddListener(BuyRule);
         buyBuffButton.onClick.AddListener(BuyBuff);
@@ -100,21 +118,20 @@ public class ShopController : MonoBehaviour
             : piercingCard;
 
         cardOfferText.text = cardIsUpgrade
-            ? $"Upgrade a Card — {cardPrice} coins"
-            : $"Add {offeredCard.displayName} — {cardPrice} coins";
+            ? "Upgrade Card"
+            : $"Add {offeredCard.displayName}";
 
-        ruleOfferText.text =
-            $"Upgrade Condition to ANY — {RulePrice} coins";
+        ruleOfferText.text = "Upgrade Condition";
 
-        buffOfferText.text =
-            $"Upgrade Bingo Buff — {BuffPrice} coins";
-
-        cardTargetDropdown.gameObject.SetActive(cardIsUpgrade);
+        buffOfferText.text = "Upgrade Buff";
 
         BuildTargetLists();
 
-        shopStatusText.text =
-            "Select your upgrades or continue without buying.";
+        shopStatusText.text = "Choose one upgrade.";
+
+        SetButtonLabel(buyCardButton, $"Buy {cardPrice}");
+        SetButtonLabel(buyRuleButton, $"Buy {RulePrice}");
+        SetButtonLabel(buyBuffButton, $"Buy {BuffPrice}");
 
         RefreshViews();
     }
@@ -218,75 +235,41 @@ public class ShopController : MonoBehaviour
         if (run == null)
             return;
 
-        shopCoinsText.text = $"Coins: {run.Coins}";
+        shopCoinsText.text = $"Coins {run.Coins}";
 
-        CardInstance selectedCard = GetSelectedCard();
+        cardPreviewText.text = cardIsUpgrade
+            ? "Choose a card"
+            : DescribeCard(offeredCard);
 
-        if (cardIsUpgrade)
-        {
-            cardPreviewText.text = selectedCard == null
-                ? "No cards available"
-                : $"{selectedCard.Data.displayName}: " +
-                  $"{selectedCard.Value} → " +
-                  $"{selectedCard.Value + selectedCard.Data.upgradeIncrease}";
-        }
-        else
-        {
-            cardPreviewText.text =
-                $"Add one {offeredCard.displayName} " +
-                $"(Value: {offeredCard.baseValue})";
-        }
+        rulePreviewText.text = ruleTargets.Count == 0
+            ? "No empty cells"
+            : "Choose a cell";
 
-        int ruleIndex =
-            GetSelectedCell(ruleTargetDropdown, ruleTargets);
-
-        rulePreviewText.text = ruleIndex < 0
-            ? "No empty cells available"
-            : $"{board.Cells[ruleIndex].CurrentRule.GetLabel()}" +
-              " → ANY\nExisting buff unchanged";
-
-        int buffIndex =
-            GetSelectedCell(buffTargetDropdown, buffTargets);
-
-        if (buffIndex < 0)
-        {
-            buffPreviewText.text = "No eligible buff cells";
-        }
-        else
-        {
-            BingoCellUI cell = board.Cells[buffIndex];
-
-            buffPreviewText.text =
-                $"{cell.BuffCode} Lv.{cell.BuffLevel}" +
-                $" → Lv.{cell.BuffLevel + 1}" +
-                (cell.IsMarked
-                    ? "\nImproved effect triggers immediately"
-                    : "\nImproved effect activates when filled");
-        }
+        buffPreviewText.text = buffTargets.Count == 0
+            ? "No buff cells"
+            : "Choose a cell";
 
         buyCardButton.interactable =
             !cardPurchased &&
             run.Coins >= cardPrice &&
-            (!cardIsUpgrade || selectedCard != null);
+            (!cardIsUpgrade || cardTargets.Count > 0);
 
         buyRuleButton.interactable =
             !rulePurchased &&
             run.Coins >= RulePrice &&
-            ruleIndex >= 0;
+            ruleTargets.Count > 0;
 
         buyBuffButton.interactable =
             !buffPurchased &&
             run.Coins >= BuffPrice &&
-            buffIndex >= 0;
+            buffTargets.Count > 0;
 
-        if (cardPurchased)
-            cardPreviewText.text += "\nPURCHASED";
-
-        if (rulePurchased)
-            rulePreviewText.text += "\nPURCHASED";
-
-        if (buffPurchased)
-            buffPreviewText.text += "\nPURCHASED";
+        SetButtonLabel(buyCardButton,
+            cardPurchased ? "Purchased" : $"Buy {cardPrice}");
+        SetButtonLabel(buyRuleButton,
+            rulePurchased ? "Purchased" : $"Buy {RulePrice}");
+        SetButtonLabel(buyBuffButton,
+            buffPurchased ? "Purchased" : $"Buy {BuffPrice}");
     }
 
     private void HandleSelectionChanged(int _)
@@ -299,15 +282,34 @@ public class ShopController : MonoBehaviour
         if (cardPurchased || run.Coins < cardPrice)
             return;
 
+        if (cardIsUpgrade)
+        {
+            if (targetOverlay == null || cardTargets.Count == 0)
+                return;
+
+            targetOverlay.ShowCards(
+                cardTargets,
+                "Upgrade which card?",
+                ApplyCardPurchase);
+
+            return;
+        }
+
+        ApplyCardPurchase(null);
+    }
+
+    private void ApplyCardPurchase(CardInstance target)
+    {
+        if (cardPurchased || run.Coins < cardPrice)
+            return;
+
         bool applied = cardIsUpgrade
-            ? combat.TryUpgradeShopCard(GetSelectedCard())
+            ? combat.TryUpgradeShopCard(target)
             : combat.TryAddShopCard(offeredCard);
 
         if (!applied)
             return;
 
-        // No other code changes coins during this
-        // synchronous button-click operation.
         if (!run.TrySpendCoins(cardPrice))
         {
             Debug.LogError("Unexpected card payment failure.");
@@ -316,7 +318,7 @@ public class ShopController : MonoBehaviour
 
         cardPurchased = true;
 
-        CompletePurchase("Card purchased successfully!");
+        CompletePurchase("Card purchased.");
     }
 
     private void BuyRule()
@@ -324,10 +326,19 @@ public class ShopController : MonoBehaviour
         if (rulePurchased || run.Coins < RulePrice)
             return;
 
-        int index =
-            GetSelectedCell(ruleTargetDropdown, ruleTargets);
+        if (targetOverlay == null || ruleTargets.Count == 0)
+            return;
 
-        if (index < 0)
+        targetOverlay.ShowCells(
+            board,
+            ruleTargets,
+            "Upgrade which cell?",
+            ApplyRulePurchase);
+    }
+
+    private void ApplyRulePurchase(int index)
+    {
+        if (rulePurchased || run.Coins < RulePrice)
             return;
 
         bool applied = board.TryUpgradeRule(
@@ -346,7 +357,7 @@ public class ShopController : MonoBehaviour
 
         rulePurchased = true;
 
-        CompletePurchase("Number condition upgraded!");
+        CompletePurchase("Condition upgraded.");
     }
 
     private void BuyBuff()
@@ -354,10 +365,22 @@ public class ShopController : MonoBehaviour
         if (buffPurchased || run.Coins < BuffPrice)
             return;
 
-        int index =
-            GetSelectedCell(buffTargetDropdown, buffTargets);
+        if (targetOverlay == null || buffTargets.Count == 0)
+            return;
 
-        if (index < 0 || !board.TryUpgradeBuff(index))
+        targetOverlay.ShowCells(
+            board,
+            buffTargets,
+            "Upgrade which cell?",
+            ApplyBuffPurchase);
+    }
+
+    private void ApplyBuffPurchase(int index)
+    {
+        if (buffPurchased || run.Coins < BuffPrice)
+            return;
+
+        if (!board.TryUpgradeBuff(index))
             return;
 
         if (!run.TrySpendCoins(BuffPrice))
@@ -368,15 +391,130 @@ public class ShopController : MonoBehaviour
 
         buffPurchased = true;
 
-        CompletePurchase("Bingo buff upgraded!");
+        CompletePurchase("Buff upgraded.");
     }
 
     private void CompletePurchase(string message)
     {
+        AudioManager.Play(Sfx.Buy);
+
         shopStatusText.text = message;
 
         RefreshViews();
         PurchasesChanged?.Invoke();
+    }
+
+    private void AddShopBackdrop()
+    {
+        Sprite backdrop = Resources.Load<Sprite>("UI/shop_bg");
+
+        if (backdrop == null)
+            return;
+
+        GameObject go = new GameObject(
+            "ShopBackdrop",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+
+        RectTransform rect = go.GetComponent<RectTransform>();
+        rect.SetParent(transform, false);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        Image image = go.GetComponent<Image>();
+        image.sprite = backdrop;
+        image.color = new Color(1f, 1f, 1f, 0.12f);
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+
+        go.transform.SetAsFirstSibling();
+    }
+
+    private void AddShopSign()
+    {
+        Sprite sign = Resources.Load<Sprite>("UI/shop_sign");
+
+        if (sign == null)
+            return;
+
+        GameObject go = new GameObject(
+            "ShopSign",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+
+        RectTransform rect = go.GetComponent<RectTransform>();
+        rect.SetParent(transform, false);
+        rect.anchorMin = new Vector2(0.5f, 1f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(0f, -10f);
+        rect.sizeDelta = new Vector2(200f, 130f);
+
+        Image image = go.GetComponent<Image>();
+        image.sprite = sign;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+
+        go.transform.SetAsLastSibling();
+    }
+
+    private void AddBoxFrame(RectTransform panel)
+    {
+        if (panel == null || boxFrameSprite == null)
+            return;
+
+        GameObject go = new GameObject(
+            "BoxFrame",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+
+        RectTransform rect = go.GetComponent<RectTransform>();
+        rect.SetParent(panel, false);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        Image image = go.GetComponent<Image>();
+        image.sprite = boxFrameSprite;
+        image.type = Image.Type.Simple;
+        image.preserveAspect = false;
+        image.raycastTarget = false;
+        image.color = Color.white;
+
+        go.transform.SetAsFirstSibling();
+    }
+
+    private static void SetButtonLabel(Button button, string text)
+    {
+        TMP_Text label = button.GetComponentInChildren<TMP_Text>();
+
+        if (label != null)
+            label.text = text;
+    }
+
+    private static string DescribeCard(CardData card)
+    {
+        switch (card.type)
+        {
+            case CardType.Attack:
+                return $"Deal {card.baseValue} damage";
+            case CardType.Defend:
+                return $"Gain {card.baseValue} Shield";
+            case CardType.Focus:
+                return $"+{card.baseValue} next Attack";
+            case CardType.Heal:
+                return $"Restore {card.baseValue} HP";
+            case CardType.PiercingAttack:
+                return $"Deal {card.baseValue} damage, pierces Shield";
+            default:
+                return "";
+        }
     }
 
     private void OnDestroy()

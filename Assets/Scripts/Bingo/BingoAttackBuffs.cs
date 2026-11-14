@@ -24,6 +24,15 @@ public class BingoAttackBuffs : MonoBehaviour
 
     public int NextRoundExtraDraws => nextRoundExtraDraws;
 
+    public int ActiveAttackBuff =>
+        PendingAttackBonus + PendingAfterActionDamage;
+
+    public int ActiveDefenseBuff =>
+        PendingRoundShield + PendingEnemyAttackReduction;
+
+    public int ActiveHealBuff =>
+        PendingEndRoundHealing;
+
     // Immediate effects are handled by RoundManager.
     public event Action<int> ImmediateHealingRequested;
     public event Action<int> ImmediateFocusRequested;
@@ -83,6 +92,10 @@ public class BingoAttackBuffs : MonoBehaviour
                 nextRoundExtraDraws += 1 + bonus;
                 break;
 
+            case "LUCKY":
+                // Centre wildcard: matches any number, no stat buff.
+                return;
+
             default:
                 Debug.LogWarning(
                     $"Unknown Bingo buff: {buffCode}"
@@ -109,7 +122,7 @@ public class BingoAttackBuffs : MonoBehaviour
     {
         int handSize = Mathf.Min(
             normalSize + currentRoundExtraDraws,
-            5
+            4
         );
 
         currentRoundExtraDraws = 0;

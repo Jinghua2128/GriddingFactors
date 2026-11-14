@@ -18,6 +18,7 @@ public class CombatManager : MonoBehaviour
     [SerializeField] private CardData attackCard;
     [SerializeField] private CardData defendCard;
     [SerializeField] private CardData focusCard;
+    [SerializeField] private CardData piercingCard;
 
     [Header("Card UI")]
     [SerializeField] private CardView cardPrefab;
@@ -61,6 +62,18 @@ public class CombatManager : MonoBehaviour
     public int PlayerFocus =>
         player != null ? player.Focus : 0;
 
+    public int PlayerShield =>
+        player != null ? player.Shield : 0;
+
+    public int EnemyHP =>
+        enemy != null ? enemy.HP : 0;
+
+    public int EnemyMaxHP =>
+        enemy != null ? enemy.MaxHP : 0;
+
+    public int EnemyShield =>
+        enemy != null ? enemy.Shield : 0;
+
     public IReadOnlyList<CardInstance> ShopCards =>
         deck != null
             ? deck.AllCards
@@ -97,6 +110,7 @@ public class CombatManager : MonoBehaviour
         if (attackCard == null ||
             defendCard == null ||
             focusCard == null ||
+            piercingCard == null ||
             cardPrefab == null ||
             handPanel == null ||
             playerStatusText == null ||
@@ -119,7 +133,8 @@ public class CombatManager : MonoBehaviour
         deck = new DeckManager(
             attackCard,
             defendCard,
-            focusCard
+            focusCard,
+            piercingCard
         );
 
         continueButton.onClick.AddListener(
@@ -167,6 +182,8 @@ public class CombatManager : MonoBehaviour
 
         var hand = deck.DrawHand(handSize);
 
+        AudioManager.Play(Sfx.CardDraw, 0.7f);
+
         Debug.Log(
             $"Combat hand: {handSize} cards drawn."
         );
@@ -196,6 +213,8 @@ public class CombatManager : MonoBehaviour
 
         if (!deck.PlayCard(card))
             return;
+
+        AudioManager.Play(Sfx.Card);
 
         waitingForCard = false;
 

@@ -88,23 +88,20 @@ public class BingoLineFeedbackUI : MonoBehaviour
         int vertical = ultimates.VerticalCharges;
         int diagonal = ultimates.DiagonalCharges;
 
-        string attack = horizontal > 0
-            ? $"x{1 << horizontal} next Attack"
-            : "None";
+        List<string> bonuses = new List<string>();
 
-        string defense = vertical > 0
-            ? $"{vertical} Attack Block(s)"
-            : "None";
+        if (horizontal > 0)
+            bonuses.Add($"Attack x{1 << horizontal}");
 
-        string card = diagonal > 0
-            ? $"x{1 << diagonal} next Card, Heal {diagonal * 5}"
-            : "None";
+        if (vertical > 0)
+            bonuses.Add($"Block {vertical}");
 
-        pendingUltimatesText.text =
-            "PENDING ULTIMATES\n" +
-            $"Attack: {attack}\n" +
-            $"Defense: {defense}\n" +
-            $"Diagonal: {card}";
+        if (diagonal > 0)
+            bonuses.Add($"Card x{1 << diagonal}, Heal {diagonal * 5}");
+
+        pendingUltimatesText.text = bonuses.Count == 0
+            ? ""
+            : "BONUS\n" + string.Join("\n", bonuses);
     }
 
     private void OnDestroy()

@@ -1,4 +1,5 @@
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -33,11 +34,33 @@ public class PowerballBag
             return false;
         }
 
-        int index = Random.Range(0, availableNumbers.Count);
+        int index = UnityEngine.Random.Range(0, availableNumbers.Count);
 
         number = availableNumbers[index];
 
         availableNumbers.RemoveAt(index);
+
+        return true;
+    }
+
+    // Rerolls only draw numbers that can actually be placed.
+    public bool TryDrawMatching(
+        Func<int, bool> predicate,
+        out int number)
+    {
+        List<int> matches = availableNumbers.FindAll(
+            candidate => predicate(candidate)
+        );
+
+        if (matches.Count == 0)
+        {
+            number = 0;
+            return false;
+        }
+
+        number = matches[UnityEngine.Random.Range(0, matches.Count)];
+
+        availableNumbers.Remove(number);
 
         return true;
     }

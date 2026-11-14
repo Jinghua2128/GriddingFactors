@@ -230,9 +230,7 @@ public class RoundManager : MonoBehaviour
         ShowPanel(shopPanel);
 
         shopSummaryText.text =
-            $"ENCOUNTER {run.EncounterNumber} COMPLETE!\n" +
-            $"Coins earned: +{reward}\n\n" +
-            "Choose your upgrades.";
+            $"Encounter {run.EncounterNumber} cleared   +{reward} coins";
 
         // Open the three offers for this shop visit.
         shopController.Open(
@@ -276,11 +274,13 @@ public class RoundManager : MonoBehaviour
         ShowPanel(victoryPanel);
 
         victorySummaryText.text =
-            "RUN COMPLETE!\n\n" +
-            $"Encounters defeated: {run.CompletedEncounters}/5\n" +
-            $"Bingo lines completed: {bingoBoard.CompletedLineCount}/12\n" +
-            $"Final coins: {run.Coins}\n" +
-            $"Player HP: {combat.PlayerHP}/{combat.PlayerMaxHP}";
+            "RUN COMPLETE\n" +
+            $"{run.CompletedEncounters}/5 encounters   " +
+            $"{bingoBoard.CompletedLineCount}/12 lines\n" +
+            $"{run.Coins} coins   " +
+            $"{combat.PlayerHP}/{combat.PlayerMaxHP} HP";
+
+        AudioManager.Play(Sfx.Win);
 
         Debug.Log("GRIDDING FACTORS: VICTORY!");
     }
@@ -292,11 +292,12 @@ public class RoundManager : MonoBehaviour
         ShowPanel(defeatPanel);
 
         defeatSummaryText.text =
-            "RUN ENDED\n\n" +
-            $"Encounters defeated: {run.CompletedEncounters}/5\n" +
-            $"Reached encounter: {run.EncounterNumber}/5\n" +
-            $"Bingo lines completed: {bingoBoard.CompletedLineCount}/12\n" +
-            $"Coins remaining: {run.Coins}";
+            "RUN ENDED\n" +
+            $"{run.CompletedEncounters}/5 encounters   " +
+            $"{bingoBoard.CompletedLineCount}/12 lines\n" +
+            $"{run.Coins} coins";
+
+        AudioManager.Play(Sfx.Lose);
 
         Debug.Log("GRIDDING FACTORS: DEFEAT");
     }
@@ -316,7 +317,7 @@ public class RoundManager : MonoBehaviour
         encounterText.text =
             $"Encounter {run.EncounterNumber}/{run.TotalEncounters}";
 
-        coinsText.text = $"Coins: {run.Coins}";
+        coinsText.text = $"Coins {run.Coins}";
     }
 
     private void RefreshBingoHUD()

@@ -25,6 +25,9 @@ public class BingoCellUI : MonoBehaviour
 
     public bool IsEligible { get; private set; }
 
+    private Image eligibleHighlightImage;
+    private Outline eligibleOutline;
+    private float pulseTime;
 
     [Header("Completed Bingo Visuals")]
     [SerializeField] private GameObject completedLineHighlight;
@@ -81,6 +84,63 @@ public class BingoCellUI : MonoBehaviour
 
         if (bingoButton != null)
             bingoButton.interactable = IsEligible;
+
+        if (eligibleOutline != null)
+            eligibleOutline.enabled = IsEligible;
+
+        if (buttonImage != null)
+        {
+            if (IsEligible)
+            {
+                buttonImage.color = Color.Lerp(
+                    GetRuleColor(),
+                    Color.white,
+                    0.18f);
+            }
+            else if (!IsMarked)
+            {
+                buttonImage.color = GetRuleColor();
+            }
+        }
+
+        if (!IsEligible)
+        {
+            transform.localScale = Vector3.one;
+
+            if (eligibleHighlightImage != null)
+            {
+                Color c = eligibleHighlightImage.color;
+                c.a = 0.25f;
+                eligibleHighlightImage.color = c;
+            }
+        }
+    }
+
+    private void Update()
+    {
+        if (!IsEligible || IsMarked)
+            return;
+
+        pulseTime += Time.unscaledDeltaTime * 4.5f;
+
+        float t = (Mathf.Sin(pulseTime) + 1f) * 0.5f;
+
+        if (eligibleHighlightImage != null)
+        {
+            Color c = eligibleHighlightImage.color;
+            c.a = Mathf.Lerp(0.18f, 0.55f, t);
+            eligibleHighlightImage.color = c;
+        }
+
+        if (eligibleOutline != null)
+        {
+            Color c = eligibleOutline.effectColor;
+            c.a = Mathf.Lerp(0.5f, 1f, t);
+            eligibleOutline.effectColor = c;
+        }
+
+        transform.localScale =
+            Vector3.one * Mathf.Lerp(1f, 1.045f, t);
     }
 
     private void HandleClick()
@@ -99,6 +159,26 @@ public class BingoCellUI : MonoBehaviour
 
         if (bingoButton != null)
             bingoButton.onClick.AddListener(HandleClick);
+
+        if (eligibleHighlight != null)
+            eligibleHighlightImage =
+                eligibleHighlight.GetComponent<Image>();
+
+        if (buttonImage != null)
+        {
+            eligibleOutline =
+                buttonImage.GetComponent<Outline>();
+
+            if (eligibleOutline == null)
+                eligibleOutline =
+                    buttonImage.gameObject.AddComponent<Outline>();
+
+            eligibleOutline.effectColor =
+                new Color32(255, 220, 90, 255);
+            eligibleOutline.effectDistance =
+                new Vector2(3f, -3f);
+            eligibleOutline.enabled = false;
+        }
 
         SetEligible(false);
 
@@ -181,6 +261,7 @@ public class BingoCellUI : MonoBehaviour
                 return new Color32(190, 85, 110, 255);
 
             case BingoRuleType.Wildcard:
+            case BingoRuleType.Any:
                 return new Color32(220, 180, 65, 255);
 
             default:

@@ -78,12 +78,12 @@ public class PowerballController : MonoBehaviour
 
         if (bag.RemainingCount == 0)
         {
-            ballNumberText.text = "EMPTY";
-            FinishPhase("No Powerballs remain.");
+            ballNumberText.text = "-";
+            FinishPhase("Bag empty.");
             return;
         }
 
-        SetStatus("Draw a Powerball!");
+        SetStatus("Draw a ball.");
     }
 
     private void DrawNumber()
@@ -105,15 +105,39 @@ public class PowerballController : MonoBehaviour
 
         board.ClearHighlights();
 
-        // Only one reroll allowed.
-        DrawAndCheck(false);
+        // A reroll should feel useful: draw a number that
+        // can actually be placed on the current board.
+        if (!bag.TryDrawMatching(HasMatchingCell, out currentNumber))
+        {
+            FinishPhase("No match - continue.");
+            return;
+        }
+
+        ballNumberText.text = currentNumber.ToString();
+
+        board.HighlightMatches(currentNumber);
+
+        awaitingPlacement = true;
+
+        SetStatus("Pick a matching cell.");
+    }
+
+    private bool HasMatchingCell(int number)
+    {
+        foreach (BingoCellUI cell in board.Cells)
+        {
+            if (cell.CanPlace(number))
+                return true;
+        }
+
+        return false;
     }
 
     private void DrawAndCheck(bool allowReroll)
     {
         if (!bag.TryDraw(out currentNumber))
         {
-            FinishPhase("No Powerballs remain.");
+            FinishPhase("Bag empty.");
             return;
         }
 
@@ -123,9 +147,7 @@ public class PowerballController : MonoBehaviour
         // Full-board reward effects come later.
         if (!board.HasEmptyCells())
         {
-            FinishPhase(
-                "Board full! Drawn: " + currentNumber
-            );
+            FinishPhase("Board full - " + currentNumber);
 
             return;
         }
@@ -137,9 +159,7 @@ public class PowerballController : MonoBehaviour
         {
             awaitingPlacement = true;
 
-            SetStatus(
-                $"Choose one of {matchingCells} matching cells."
-            );
+            SetStatus("Pick a matching cell.");
 
             return;
         }
@@ -148,16 +168,12 @@ public class PowerballController : MonoBehaviour
         {
             rerollButton.interactable = true;
 
-            SetStatus(
-                "No matching cells. Reroll available!"
-            );
+            SetStatus("No match - reroll.");
 
             return;
         }
 
-        FinishPhase(
-            "No matching cells. Continue to combat."
-        );
+        FinishPhase("No match - continue.");
     }
 
     private void HandleCellClicked(BingoCellUI cell)
@@ -170,11 +186,14 @@ public class PowerballController : MonoBehaviour
 
         awaitingPlacement = false;
 
-        string message =
-            $"Placed number {currentNumber}!";
+        AudioManager.Play(Sfx.Place);
+
+        string message = $"Placed {currentNumber}.";
 
         if (board.LastNewLines.Count > 0)
         {
+            AudioManager.Play(Sfx.Bingo, 0.75f);
+
             message += "\nBINGO! ";
 
             for (int i = 0;

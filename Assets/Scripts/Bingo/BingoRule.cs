@@ -56,6 +56,7 @@ public readonly struct BingoRule
                 return true;
 
             case BingoRuleType.Wildcard:
+            case BingoRuleType.Any:
                 return true;
 
             default:
@@ -74,6 +75,7 @@ public readonly struct BingoRule
             case BingoRuleType.LessThan: return "<" + Value;
             case BingoRuleType.Prime: return "PRIME";
             case BingoRuleType.Wildcard: return "WILD";
+            case BingoRuleType.Any: return "ANY";
             default: return "?";
         }
     }

@@ -18,13 +18,23 @@ public class DeckManager
     public DeckManager(
         CardData attack,
         CardData defend,
-        CardData focus)
+        CardData focus,
+        CardData piercing = null)
     {
         AddCopies(attack, 4);
         AddCopies(defend, 3);
         AddCopies(focus, 2);
 
         Shuffle(drawPile);
+
+        if (piercing != null)
+        {
+            // One ultimate card, guaranteed in the opening hand.
+            CardInstance ultimate = new CardInstance(piercing);
+
+            allCards.Add(ultimate);
+            drawPile.Insert(0, ultimate);
+        }
     }
 
 

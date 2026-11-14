@@ -1,0 +1,21 @@
+Audio credits
+
+BGM
+"Lost in the forest" by TOOPS
+OpenGameArt.org — CC-BY 4.0
+https://opengameart.org/content/lost-in-the-forest
+
+SFX
+Kenney Casino Audio — CC0
+https://kenney.nl/assets/casino-audio
+
+Kenney UI Audio — CC0
+https://kenney.nl/assets/interface-sounds
+
+"Win sound effect" by Listener — CC0
+https://opengameart.org/content/win-sound-effect
+
+"Bingo Machine Sound Effect" — CC0
+https://memesoundboards.org/sound/bingo-machine-sound-effect/
+
+Defeat tone generated for this project.
