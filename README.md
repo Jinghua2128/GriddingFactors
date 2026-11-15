@@ -2,6 +2,8 @@
 
 **A hand-drawn bingo deckbuilder about turning lucky numbers into a build.**
 
+**Play the game:** [longmai2128.itch.io/gridding-factors](https://longmai2128.itch.io/gridding-factors)
+
 Gridding Factors is a short run-based game built in Unity 6 for the Official Unity Game Jam 2026. The jam theme is **Lucky Numbers**. Instead of treating bingo as a side minigame, the board is the engine that powers the cards: every marked cell changes the next fight, and every completed line gives you an Ultimate.
 
 ## Jam theme: Lucky Numbers
